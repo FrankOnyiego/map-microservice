@@ -60,7 +60,7 @@ const FitBounds = ({ pickup, dropoff, currentLocation }) => {
 
 // 🧮 Haversine distance between two [lat, lng] points in km
 function haversineDistance(coord1, coord2) {
-  const R = 6371; // radius of Earth in km
+  const R = 6371;
   const toRad = (deg) => (deg * Math.PI) / 180;
 
   const dLat = toRad(coord2[0] - coord1[0]);
@@ -70,17 +70,14 @@ function haversineDistance(coord1, coord2) {
   const lat2 = toRad(coord2[0]);
 
   const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.sin(dLon / 2) *
-      Math.sin(dLon / 2) *
-      Math.cos(lat1) *
-      Math.cos(lat2);
+    Math.sin(dLat / 2) ** 2 +
+    Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; // distance in km
+  return R * c;
 }
 
-// ⏱️ Convert seconds → days:hours:minutes:seconds
+// ⏱️ Convert seconds → d:h:m:s
 function formatTime(seconds) {
   const d = Math.floor(seconds / (24 * 3600));
   seconds %= 24 * 3600;
@@ -93,27 +90,33 @@ function formatTime(seconds) {
 }
 
 function App() {
-  const [pickup, setPickup] = useState(null);
-  const [dropoff, setDropoff] = useState(null);
-  const [currentLocation, setCurrentLocation] = useState(null);
-  const [eta, setEta] = useState(null);
-  const [speed, setSpeed] = useState(null); // m/s from device
+  // ✅ Defaults (Nairobi area)
+  const defaultPickup = [1.2921, 36.8219];
+  const defaultDropoff = [1.3521, 36.9419];
+  const defaultCurrent = [1.3000, 36.8500];
+  const defaultSpeedKmh = 40;
 
-  // Load pickup/dropoff from query
+  const [pickup, setPickup] = useState(defaultPickup);
+  const [dropoff, setDropoff] = useState(defaultDropoff);
+  const [currentLocation, setCurrentLocation] = useState(defaultCurrent);
+  const [eta, setEta] = useState(null);
+  const [speed, setSpeed] = useState(null); // m/s
+
+  // Parse query string
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const parseCoords = (param) => {
+    const parseCoords = (param, fallback) => {
       const val = params.get(param);
-      if (!val) return null;
+      if (!val) return fallback;
       const [lat, lng] = val.split(",").map(Number);
       return [lat, lng];
     };
 
-    setPickup(parseCoords("pickup") || [1.2921, 36.8219]);
-    setDropoff(parseCoords("dropoff") || [1.3521, 36.9419]);
+    setPickup(parseCoords("pickup", defaultPickup));
+    setDropoff(parseCoords("dropoff", defaultDropoff));
   }, []);
 
-  // Track live location & speed from device
+  // Track live location
   useEffect(() => {
     if ("geolocation" in navigator) {
       const watchId = navigator.geolocation.watchPosition(
@@ -122,35 +125,32 @@ function App() {
           setCurrentLocation([latitude, longitude]);
           setSpeed(speed); // may be null
         },
-        (err) => console.error("GPS error:", err),
+        () => {
+          // fallback
+          setCurrentLocation(defaultCurrent);
+          setSpeed(defaultSpeedKmh / 3.6); // back to m/s
+        },
         { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
       );
-
       return () => navigator.geolocation.clearWatch(watchId);
+    } else {
+      setCurrentLocation(defaultCurrent);
+      setSpeed(defaultSpeedKmh / 3.6);
     }
   }, []);
 
-  // Calculate ETA
+  // ETA calculation
   useEffect(() => {
     if (currentLocation && dropoff) {
       const distanceKm = haversineDistance(currentLocation, dropoff);
-
-      let speedKmh;
-      if (speed && speed > 0) {
-        speedKmh = speed * 3.6; // m/s → km/h
-      } else {
-        speedKmh = 40; // fallback if no device speed
-      }
+      const speedKmh =
+        speed && speed > 0 ? speed * 3.6 : defaultSpeedKmh;
 
       const timeHours = distanceKm / speedKmh;
       const timeSeconds = timeHours * 3600;
       setEta(formatTime(timeSeconds));
     }
   }, [currentLocation, dropoff, speed]);
-
-  if (!pickup || !dropoff || !currentLocation) {
-    return <div>Loading map...</div>;
-  }
 
   return (
     <MapContainer
@@ -169,7 +169,6 @@ function App() {
         currentLocation={currentLocation}
       />
 
-      {/* 🟢 Pickup marker (North) */}
       <Marker position={pickup} icon={greenIcon}>
         <Tooltip permanent direction="top" offset={[0, -20]}>
           🟢 Pickup
@@ -177,7 +176,6 @@ function App() {
         <Popup>Pickup Location</Popup>
       </Marker>
 
-      {/* 🔴 Dropoff marker (South) */}
       <Marker position={dropoff} icon={redIcon}>
         <Tooltip permanent direction="bottom" offset={[0, 20]}>
           🔴 Drop-off
@@ -185,19 +183,22 @@ function App() {
         <Popup>Drop-off Location</Popup>
       </Marker>
 
-      {/* 🚚 Current location (East) */}
       <Marker position={currentLocation} icon={blueIcon}>
         <Tooltip permanent direction="right" offset={[20, 0]}>
-          🚚 Truck {eta ? `-Arriving in  ${eta}` : "Calculating..."}
+          🚚 Truck{" "}
+          {eta ? `- Arriving in ${eta}` : "Calculating..."}
         </Tooltip>
         <Popup>
           Current Location <br />
-          Speed: {speed ? (speed * 3.6).toFixed(1) + " km/h" : "N/A"} <br />
+          Speed:{" "}
+          {speed
+            ? (speed * 3.6).toFixed(1) + " km/h"
+            : defaultSpeedKmh + " km/h (default)"}{" "}
+          <br />
           ETA: {eta || "Calculating..."}
         </Popup>
       </Marker>
 
-      {/* Line from pickup → dropoff */}
       <Polyline positions={[pickup, dropoff]} color="blue" />
     </MapContainer>
   );
