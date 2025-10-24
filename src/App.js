@@ -219,9 +219,9 @@ const [eta, setEta] = useState(null);
       ) : (
         <>
           {/* Spinner overlay if coordinates or speed not ready */}
-          {(!pickup || !dropoff || !currentLocation || !speedKmh) && <MapSpineer />}
+          {(!pickup || !dropoff || !currentLocation) && <MapSpineer />}
           
-          {pickup && dropoff && currentLocation && speedKmh && (
+          {pickup && dropoff && currentLocation&& (
               <>
                 <FitBounds points={[pickup, dropoff, currentLocation]} />
 
