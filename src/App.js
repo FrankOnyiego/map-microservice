@@ -10,6 +10,7 @@ import {
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import "./App.css";
+import MapSpineer from "./mapSpineer";
 
 // ✅ Role icons
 const adminIcon = new L.Icon({
@@ -104,16 +105,12 @@ const formatTime = (seconds) => {
 };
 
 function App() {
-  const defaultPickup = [1.2921, 36.8219];
-  const defaultDropoff = [1.3521, 36.9419];
-  const defaultCurrent = [1.3, 36.85];
-  const defaultSpeedKmh = 80;
+const [pickup, setPickup] = useState(null);
+const [dropoff, setDropoff] = useState(null);
+const [currentLocation, setCurrentLocation] = useState(null);
+const [speedKmh, setSpeedKmh] = useState(null);
+const [eta, setEta] = useState(null);
 
-  const [pickup, setPickup] = useState(defaultPickup);
-  const [dropoff, setDropoff] = useState(defaultDropoff);
-  const [currentLocation, setCurrentLocation] = useState(defaultCurrent);
-  const [speedKmh, setSpeedKmh] = useState(defaultSpeedKmh);
-  const [eta, setEta] = useState(null);
   const [city, setCity] = useState(null);
   const [cityUsers, setCityUsers] = useState([]);
 
@@ -221,31 +218,33 @@ function App() {
         </>
       ) : (
         <>
-          {/* ✅ Default: shipment tracking */}
-          <FitBounds points={[pickup, dropoff, currentLocation]} />
+          {/* Spinner overlay if coordinates or speed not ready */}
+          {(!pickup || !dropoff || !currentLocation || !speedKmh) && <MapSpineer />}
+          
+          {pickup && dropoff && currentLocation && speedKmh && (
+              <>
+                <FitBounds points={[pickup, dropoff, currentLocation]} />
 
-          <Marker position={pickup} icon={greenIcon}>
-            <Tooltip permanent direction="top">
-              🟢 Pickup
-            </Tooltip>
-          </Marker>
+                <Marker position={pickup} icon={greenIcon}>
+                  <Tooltip permanent direction="top">🟢 Pickup Location</Tooltip>
+                </Marker>
 
-          <Marker position={dropoff} icon={redIcon}>
-            <Tooltip permanent direction="bottom">
-              🔴 Drop-off
-            </Tooltip>
-          </Marker>
+                <Marker position={dropoff} icon={redIcon}>
+                  <Tooltip permanent direction="bottom">🔴 Drop-off Location</Tooltip>
+                </Marker>
 
-          <Marker position={currentLocation} icon={blueIcon}>
-            <Tooltip permanent direction="right">
-              🚚 Truck {eta ? `- ${eta}` : "Calculating..."}
-            </Tooltip>
-            <Popup>
-              Current Location <br />
-              Speed: {speedKmh.toFixed(1)} km/h <br />
-              ETA: {eta || "Calculating..."}
-            </Popup>
-          </Marker>
+                <Marker position={currentLocation} icon={blueIcon}>
+                  <Tooltip permanent direction="right">
+                    🚚 Truck {eta ? `- ${eta}` : "Calculating..."}
+                  </Tooltip>
+                  <Popup>
+                    Truck Location <br />
+                    Speed: {speedKmh.toFixed(1)} km/h <br />
+                    ETA: {eta || "Calculating..."}
+                  </Popup>
+                </Marker>
+              </>
+            )}
         </>
       )}
     </MapContainer>
