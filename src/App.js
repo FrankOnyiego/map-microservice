@@ -14,21 +14,19 @@ import MapSpineer from "./mapSpineer";
 
 // ✅ Role icons
 const adminIcon = new L.Icon({
-  iconUrl: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png", // 👑 Admin
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
   iconSize: [35, 35],
   iconAnchor: [17, 34],
   popupAnchor: [0, -28],
 });
-
 const transporterIcon = new L.Icon({
-  iconUrl: "https://cdn-icons-png.flaticon.com/512/743/743922.png", // 🚛 Transporter
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/743/743922.png",
   iconSize: [35, 35],
   iconAnchor: [17, 34],
   popupAnchor: [0, -28],
 });
-
 const supplierIcon = new L.Icon({
-  iconUrl: "https://cdn-icons-png.flaticon.com/512/1687/1687490.png", // 🏭 Supplier (Other)
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/1687/1687490.png",
   iconSize: [35, 35],
   iconAnchor: [17, 34],
   popupAnchor: [0, -28],
@@ -45,7 +43,6 @@ const greenIcon = new L.Icon({
   popupAnchor: [1, -34],
   shadowSize: [41, 41],
 });
-
 const redIcon = new L.Icon({
   iconUrl:
     "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
@@ -56,7 +53,6 @@ const redIcon = new L.Icon({
   popupAnchor: [1, -34],
   shadowSize: [41, 41],
 });
-
 const blueIcon = new L.Icon({
   iconUrl:
     "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
@@ -75,13 +71,13 @@ const FitBounds = ({ points }) => {
     const valid = points.filter(Boolean);
     if (valid.length > 0) {
       const bounds = L.latLngBounds(valid);
-      map.fitBounds(bounds, { padding: [50, 50] });
+      map.fitBounds(bounds, { padding: [50, 50],  maxZoom: 9 });
     }
   }, [points, map]);
   return null;
 };
 
-// ✅ Distance formula
+// ✅ Haversine distance
 const haversineDistance = ([lat1, lon1], [lat2, lon2]) => {
   const R = 6371;
   const toRad = (deg) => (deg * Math.PI) / 180;
@@ -105,16 +101,16 @@ const formatTime = (seconds) => {
 };
 
 function App() {
-const [pickup, setPickup] = useState(null);
-const [dropoff, setDropoff] = useState(null);
-const [currentLocation, setCurrentLocation] = useState(null);
-const [speedKmh, setSpeedKmh] = useState(null);
-const [eta, setEta] = useState(null);
-
+  const [pickup, setPickup] = useState(null);
+  const [dropoff, setDropoff] = useState(null);
+  const [currentLocation, setCurrentLocation] = useState(null);
+  const [speedKmh, setSpeedKmh] = useState(null);
+  const [eta, setEta] = useState(null);
   const [city, setCity] = useState(null);
   const [cityUsers, setCityUsers] = useState([]);
+  const [cityBounds, setCityBounds] = useState(null);
 
-  // ✅ Parse URL query params
+  // ✅ Parse URL params
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const parseCoords = (str) => {
@@ -147,6 +143,34 @@ const [eta, setEta] = useState(null);
     }
   }, []);
 
+  // ✅ Geocode city if provided (and no users or coords)
+  useEffect(() => {
+    if (city && cityUsers.length === 0 && !pickup && !dropoff && !currentLocation) {
+      const fetchCityBounds = async () => {
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/search?city=${encodeURIComponent(
+              city
+            )}&format=json&limit=1`
+          );
+          const data = await res.json();
+          if (data && data[0]) {
+            const { lat, lon, boundingbox } = data[0];
+            const bounds = [
+              [parseFloat(boundingbox[0]), parseFloat(boundingbox[2])],
+              [parseFloat(boundingbox[1]), parseFloat(boundingbox[3])],
+            ];
+            setCityBounds(bounds);
+            setCurrentLocation([parseFloat(lat), parseFloat(lon)]);
+          }
+        } catch (err) {
+          console.error("Failed to geocode city:", err);
+        }
+      };
+      fetchCityBounds();
+    }
+  }, [city, cityUsers, pickup, dropoff, currentLocation]);
+
   // ✅ ETA calculation
   useEffect(() => {
     if (currentLocation && dropoff && speedKmh > 0) {
@@ -166,18 +190,16 @@ const [eta, setEta] = useState(null);
     const lower = role?.toLowerCase() || "";
     if (lower === "admin") return adminIcon;
     if (lower === "transporter") return transporterIcon;
-    if (lower === "other") return supplierIcon; // “Other” → Supplier
+    if (lower === "other") return supplierIcon;
     return blueIcon;
   };
-
-  // ✅ Safe role name display
   const getDisplayRole = (role) =>
     role?.toLowerCase() === "other" ? "Supplier" : role || "Supplier";
 
   return (
     <MapContainer
-      center={currentLocation}
-      zoom={13}
+      center={currentLocation || [0, 0]}
+      zoom={cityBounds ? 6 : 5}
       style={{ height: "100vh", width: "100%" }}
     >
       <TileLayer
@@ -185,7 +207,10 @@ const [eta, setEta] = useState(null);
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
 
-      {/* ✅ City Mode: Display users by city */}
+      {/* ✅ City bounds */}
+      {cityBounds && <FitBounds points={cityBounds} />}
+
+      {/* ✅ City mode with users */}
       {city && cityUsers.length > 0 ? (
         <>
           <FitBounds
@@ -210,7 +235,9 @@ const [eta, setEta] = useState(null);
                   <br />
                   {getDisplayRole(user?.role || user?.userRole)}
                   <br />
-                  Last seen: {city}
+                  {city}
+                  <br />
+                  {user?.vehicleType}
                 </Popup>
               </Marker>
             ) : null
@@ -218,33 +245,30 @@ const [eta, setEta] = useState(null);
         </>
       ) : (
         <>
-          {/* Spinner overlay if coordinates or speed not ready */}
-          {(!pickup || !dropoff || !currentLocation) && <MapSpineer />}
-          
-          {pickup && dropoff && currentLocation&& (
-              <>
-                <FitBounds points={[pickup, dropoff, currentLocation]} />
+          {/* ✅ Spinner overlay */}
+          {(!pickup && !dropoff && !currentLocation) && <MapSpineer />}
 
-                <Marker position={pickup} icon={greenIcon}>
-                  <Tooltip permanent direction="top">🟢 Pickup Location</Tooltip>
-                </Marker>
-
-                <Marker position={dropoff} icon={redIcon}>
-                  <Tooltip permanent direction="bottom">🔴 Drop-off Location</Tooltip>
-                </Marker>
-
-                <Marker position={currentLocation} icon={blueIcon}>
-                  <Tooltip permanent direction="right">
-                    🚚 Truck {eta ? `- ${eta}` : "Calculating..."}
-                  </Tooltip>
-                  <Popup>
-                    Truck Location <br />
-                    Speed: {speedKmh.toFixed(1)} km/h <br />
-                    ETA: {eta || "Calculating..."}
-                  </Popup>
-                </Marker>
-              </>
-            )}
+          {pickup && dropoff && currentLocation && (
+            <>
+              <FitBounds points={[pickup, dropoff, currentLocation]} />
+              <Marker position={pickup} icon={greenIcon}>
+                <Tooltip permanent direction="top">🟢 Pickup Location</Tooltip>
+              </Marker>
+              <Marker position={dropoff} icon={redIcon}>
+                <Tooltip permanent direction="bottom">🔴 Drop-off Location</Tooltip>
+              </Marker>
+              <Marker position={currentLocation} icon={blueIcon}>
+                <Tooltip permanent direction="right">
+                  🚚 Truck {eta ? `- ${eta}` : "Calculating..."}
+                </Tooltip>
+                <Popup>
+                  Truck Location <br />
+                  Speed: {speedKmh?.toFixed(1)} km/h <br />
+                  ETA: {eta || "Calculating..."}
+                </Popup>
+              </Marker>
+            </>
+          )}
         </>
       )}
     </MapContainer>
