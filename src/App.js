@@ -11,6 +11,8 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import "./App.css";
 import MapSpineer from "./mapSpineer";
+import { collection, query, where, onSnapshot, getDocs, doc, getDoc } from "firebase/firestore";
+import { db } from "./firebase"; // adjust path if needed
 
 // ✅ Role icons
 const adminIcon = new L.Icon({
@@ -71,7 +73,7 @@ const FitBounds = ({ points }) => {
     const valid = points.filter(Boolean);
     if (valid.length > 0) {
       const bounds = L.latLngBounds(valid);
-      map.fitBounds(bounds, { padding: [50, 50],  maxZoom: 9 });
+      map.fitBounds(bounds, { padding: [50, 50],  maxZoom: 12 });
     }
   }, [points, map]);
   return null;
@@ -124,24 +126,14 @@ function App() {
     const currentCoords = parseCoords(params.get("current"));
     const speedParam = parseInt(params.get("speed"));
     const cityParam = params.get("city");
-    const usersParam = params.get("users");
 
     if (pickupCoords) setPickup(pickupCoords);
     if (dropoffCoords) setDropoff(dropoffCoords);
     if (currentCoords) setCurrentLocation(currentCoords);
     if (!isNaN(speedParam)) setSpeedKmh(speedParam);
     if (cityParam) setCity(cityParam);
-
-    // ✅ Decode city users if passed
-    if (usersParam) {
-      try {
-        const decoded = JSON.parse(decodeURIComponent(usersParam));
-        setCityUsers(decoded);
-      } catch (e) {
-        console.error("Error parsing users param:", e);
-      }
-    }
   }, []);
+
 
   // ✅ Geocode city if provided (and no users or coords)
   useEffect(() => {
@@ -170,6 +162,83 @@ function App() {
       fetchCityBounds();
     }
   }, [city, cityUsers, pickup, dropoff, currentLocation]);
+
+  //get the users in the city
+  useEffect(() => {
+  if (!city) return;
+
+  const updatesRef = collection(db, "userBackgroundUpdates");
+  const q = query(updatesRef, where("location.city", "==", city));
+
+  const unsubscribe = onSnapshot(q, async (snapshot) => {
+
+    const usersList = await Promise.all(
+      snapshot.docs.map(async (docSnap) => {
+
+        const data = docSnap.data();
+
+        if (!data.userId) return null;
+
+        // 🔥 Get user profile
+        const userRef = doc(db, "users", data.userId);
+        const userDoc = await getDoc(userRef);
+
+        if (!userDoc.exists()) return null;
+
+        const userData = userDoc.data();
+
+        const role = userData.role?.toLowerCase() || "";
+        const userRole = userData.userRole?.toLowerCase() || "";
+
+        if (role !== "transporter" && userRole !== "transporter")
+          return null;
+
+        // 🔥 Get rating
+        const reviewsRef = collection(db, "reviews");
+        const reviewsQ = query(
+          reviewsRef,
+          where("DriverRecievingTheRating", "==", data.userId)
+        );
+
+        const reviewsSnap = await getDocs(reviewsQ);
+
+        let averageRating = 0;
+
+        if (!reviewsSnap.empty) {
+          let total = 0;
+
+          reviewsSnap.forEach((r) => {
+            const rd = r.data();
+            if (rd.rating) total += rd.rating;
+          });
+
+          averageRating = total / reviewsSnap.size;
+        }
+
+        return {
+          userId: data.userId,
+          city: data.location?.city || "",
+          latitude: data.location?.latitude || 0,
+          longitude: data.location?.longitude || 0,
+          speed: data.location?.speed || 0,
+          fullName: userData.fullName || "",
+          phone: userData.phone || "",
+          vehicleType: userData.vehicleType || "",
+          vehicleNumber: userData.vehicleNumber || "",
+          role: userData.role || "",
+          userRole: userData.userRole || "",
+          rating: averageRating || 0,
+        };
+      })
+    );
+
+    const cleanUsers = usersList.filter(Boolean);
+    setCityUsers(cleanUsers);
+  });
+
+  return () => unsubscribe();
+
+}, [city]);
 
   // ✅ ETA calculation
   useEffect(() => {
@@ -202,10 +271,11 @@ function App() {
       zoom={cityBounds ? 6 : 5}
       style={{ height: "100vh", width: "100%" }}
     >
-      <TileLayer
-        attribution='&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+
+    <TileLayer
+      attribution='© Bridgeway Supply Chain'
+    url={`https://api.maptiler.com/maps/streets/{z}/{x}/{y}.png?key=QdJadrKmMo3jQGFPxUBf`}
+    />
 
       {/* ✅ City bounds */}
       {cityBounds && <FitBounds points={cityBounds} />}
