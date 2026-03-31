@@ -65,7 +65,12 @@ const blueIcon = new L.Icon({
   popupAnchor: [1, -34],
   shadowSize: [41, 41],
 });
-
+const meIcon = new L.Icon({
+  iconUrl: "https://cdn-icons-png.flaticon.com/512/64/64113.png", // or any standout icon
+  iconSize: [40, 40],
+  iconAnchor: [20, 40],
+  popupAnchor: [0, -35],
+});
 // ✅ Fit map to markers
 const FitBounds = ({ points }) => {
   const map = useMap();
@@ -111,6 +116,35 @@ function App() {
   const [city, setCity] = useState(null);
   const [cityUsers, setCityUsers] = useState([]);
   const [cityBounds, setCityBounds] = useState(null);
+  const [uid, setUid] = useState(null);
+
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  setUid(params.get("uid"));
+}, []);
+
+ useEffect(() => {
+    if (!uid) return;
+
+    // Listen to updates for this user directly
+    const q = query(
+      collection(db, "userBackgroundUpdates"),
+      where("userId", "in", [uid, String(uid)])
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.location && data.location.latitude != null && data.location.longitude != null) {
+          setCurrentLocation([data.location.latitude, data.location.longitude]);
+          setSpeedKmh(parseFloat(data.location.speed) || 0);
+        }
+      });
+    });
+
+    // Clean up listener on unmount or uid change
+    return () => unsubscribe();
+  }, [uid]);
 
   // ✅ Parse URL params
   useEffect(() => {
@@ -264,10 +298,10 @@ function App() {
   };
   const getDisplayRole = (role) =>
     role?.toLowerCase() === "other" ? "Supplier" : role || "Supplier";
-
+    const otherUsers = cityUsers.filter(user => user.userId !== uid);
   return (
     <MapContainer
-      center={currentLocation || [0, 0]}
+      center={currentLocation}
       zoom={cityBounds ? 6 : 5}
       style={{ height: "100vh", width: "100%" }}
     >
@@ -281,16 +315,17 @@ function App() {
       {cityBounds && <FitBounds points={cityBounds} />}
 
       {/* ✅ City mode with users */}
-      {city && cityUsers.length > 0 ? (
+      {city && otherUsers.length > 0 ? (
         <>
-          <FitBounds
-            points={cityUsers
-              .map((u) =>
-                u.latitude && u.longitude ? [u.latitude, u.longitude] : null
-              )
-              .filter(Boolean)}
-          />
-          {cityUsers.map((user, i) =>
+<FitBounds
+  points={[
+    ...otherUsers.map(u =>
+      u.latitude && u.longitude ? [u.latitude, u.longitude] : null
+    ),
+    currentLocation
+  ].filter(Boolean)}
+/>
+          {otherUsers.map((user, i) =>
             user.latitude && user.longitude ? (
               <Marker
                 key={i}
@@ -341,6 +376,15 @@ function App() {
           )}
         </>
       )}
+      {uid && currentLocation && (
+  <Marker position={currentLocation} icon={meIcon}>
+    <Tooltip permanent direction="right">You</Tooltip>
+
+    <Popup>
+      <b>Your current location.</b> <br />
+    </Popup>
+  </Marker>
+)}
     </MapContainer>
   );
 }
