@@ -83,16 +83,23 @@ const meIcon = L.divIcon({
   iconAnchor: [20, 40],
   popupAnchor: [0, -35],
 });
+
 // ✅ Fit map to markers
 const FitBounds = ({ points }) => {
   const map = useMap();
+  const [hasFitted, setHasFitted] = useState(false);
+
   useEffect(() => {
+    if (hasFitted) return;
+
     const valid = points.filter(Boolean);
     if (valid.length > 0) {
       const bounds = L.latLngBounds(valid);
-      map.fitBounds(bounds, { padding: [50, 50],  maxZoom: 12 });
+      map.fitBounds(bounds, { padding: [50, 50] });
+      setHasFitted(true);
     }
-  }, [points, map]);
+  }, [points, map, hasFitted]);
+
   return null;
 };
 
