@@ -87,18 +87,18 @@ const meIcon = L.divIcon({
 // ✅ Fit map to markers
 const FitBounds = ({ points }) => {
   const map = useMap();
-  const [hasFitted, setHasFitted] = useState(false);
+  const hasFitted = React.useRef(false);
 
   useEffect(() => {
-    if (hasFitted) return;
+    if (hasFitted.current) return;
 
     const valid = points.filter(Boolean);
     if (valid.length > 0) {
       const bounds = L.latLngBounds(valid);
       map.fitBounds(bounds, { padding: [50, 50] });
-      setHasFitted(true);
+      hasFitted.current = true;
     }
-  }, [points, map, hasFitted]);
+  }, [points, map]);
 
   return null;
 };
@@ -176,13 +176,13 @@ useEffect(() => {
 
     const pickupCoords = parseCoords(params.get("pickup"));
     const dropoffCoords = parseCoords(params.get("dropoff"));
-    const currentCoords = parseCoords(params.get("current"));
+    //const currentCoords = parseCoords(params.get("current"));
     const speedParam = parseInt(params.get("speed"));
     const cityParam = params.get("city");
 
     if (pickupCoords) setPickup(pickupCoords);
     if (dropoffCoords) setDropoff(dropoffCoords);
-    if (currentCoords) setCurrentLocation(currentCoords);
+    //if (currentCoords) setCurrentLocation(currentCoords);
     if (!isNaN(speedParam)) setSpeedKmh(speedParam);
     if (cityParam) setCity(cityParam);
   }, []);
@@ -326,12 +326,12 @@ useEffect(() => {
     >
 
     <TileLayer
-      attribution='© Bridgeway Supply Chain'
+      attribution='© The BSC'
     url={`https://api.maptiler.com/maps/streets/{z}/{x}/{y}.png?key=QdJadrKmMo3jQGFPxUBf`}
     />
 
       {/* ✅ City bounds */}
-      {cityBounds && <FitBounds points={cityBounds} />}
+      {/*cityBounds && <FitBounds points={cityBounds} />*/}
 
       {/* ✅ City mode with users */}
       {city && otherUsers.length > 0 ? (
@@ -372,7 +372,7 @@ useEffect(() => {
 
           {pickup && dropoff && currentLocation && (
             <>
-              <FitBounds points={[pickup, dropoff, currentLocation]} />
+              {/*<FitBounds points={[pickup, dropoff, currentLocation]} />*/}
               <Marker position={pickup} icon={greenIcon}>
                 <Tooltip permanent direction="top">🟢 Pickup Location</Tooltip>
               </Marker>
