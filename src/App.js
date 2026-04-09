@@ -337,25 +337,26 @@ const cleanUsers = usersList.filter(
   const getDisplayRole = (role) =>
     role?.toLowerCase() === "other" ? "Supplier" : role || "Supplier";
     const otherUsers = cityUsers.filter(user => user.userId !== uid);
-  return (
+  
+    if (!currentLocation || !pickup && !dropoff && !city && !cityBounds) {
+  return <MapSpineer />;
+}
+  
+    return (
     <MapContainer
       center={currentLocation ||
   pickup ||
   dropoff ||
-  cityBounds?.[0] ||
-  [20, 0]}
+  cityBounds?.[0]}
       zoom={cityBounds ? 6 : 5}
       style={{ height: "100vh", width: "100%" }}
     >
 
 <TileLayer
-  attribution='Tiles &copy; The BSC'
-  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+  attribution='&copy; The BSC'
+  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
 />
-      {/* ✅ City bounds */}
-      {/*cityBounds && <FitBounds points={cityBounds} />*/}
 
-      {/* ✅ City mode with users */}
       {city  ? (
         <>
 <FitBounds
