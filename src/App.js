@@ -85,20 +85,23 @@ const meIcon = L.divIcon({
 });
 
 // ✅ Fit map to markers
-const FitBounds = ({ points }) => {
+const FitBounds = ({ points, city }) => {
   const map = useMap();
-  const hasFitted = React.useRef(false);
+  const lastCityRef = React.useRef(null);
 
   useEffect(() => {
-    if (hasFitted.current) return;
-
     const valid = points.filter(Boolean);
-    if (valid.length > 0) {
+
+    if (!valid.length) return;
+
+    // ✅ Only refit when city changes
+    if (lastCityRef.current !== city) {
       const bounds = L.latLngBounds(valid);
       map.fitBounds(bounds, { padding: [50, 50] });
-      hasFitted.current = true;
+
+      lastCityRef.current = city;
     }
-  }, [points, map]);
+  }, [points, city, map]);
 
   return null;
 };
@@ -191,6 +194,7 @@ useEffect(() => {
   // ✅ Geocode city if provided (and no users or coords)
   useEffect(() => {
     if (city && cityUsers.length === 0 && !pickup && !dropoff && !currentLocation) {
+
       const fetchCityBounds = async () => {
         try {
           const res = await fetch(
@@ -217,80 +221,83 @@ useEffect(() => {
   }, [city, cityUsers, pickup, dropoff, currentLocation]);
 
   //get the users in the city
-  useEffect(() => {
+useEffect(() => {
   if (!city) return;
-
+console.log(city)
   const updatesRef = collection(db, "userBackgroundUpdates");
-  const q = query(updatesRef, where("location.city", "==", city));
+const formattedCity =
+  city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
 
+const q = query(
+  updatesRef,
+  where("location.city", "==", formattedCity)
+);
   const unsubscribe = onSnapshot(q, async (snapshot) => {
+    try {
+      const usersList = await Promise.all(
+        snapshot.docs.map(async (docSnap) => {
+          const data = docSnap.data();
+          if (!data.userId) return null;
 
-    const usersList = await Promise.all(
-      snapshot.docs.map(async (docSnap) => {
+          // 🔥 Get user profile
+          const userRef = doc(db, "users", data.userId);
+          const userDoc = await getDoc(userRef);
+          if (!userDoc.exists()) return null;
 
-        const data = docSnap.data();
+          const userData = userDoc.data();
+          const role = (userData.role || userData.userRole || "").toLowerCase();
 
-        if (!data.userId) return null;
+          if (role !== "transporter") return null;
+          
+          // 🔥 Get rating
+          const reviewsRef = collection(db, "reviews");
+          const reviewsQ = query(
+            reviewsRef,
+            where("DriverRecievingTheRating", "==", data.userId)
+          );
 
-        // 🔥 Get user profile
-        const userRef = doc(db, "users", data.userId);
-        const userDoc = await getDoc(userRef);
+          const reviewsSnap = await getDocs(reviewsQ);
 
-        if (!userDoc.exists()) return null;
+          let averageRating = 0;
 
-        const userData = userDoc.data();
+          if (!reviewsSnap.empty) {
+            let total = 0;
 
-        const role = userData.role?.toLowerCase() || "";
-        const userRole = userData.userRole?.toLowerCase() || "";
+            reviewsSnap.forEach((r) => {
+              const rd = r.data();
+              if (rd.rating) total += rd.rating;
+            });
 
-        if (role !== "transporter" && userRole !== "transporter")
-          return null;
+            averageRating = total / reviewsSnap.size;
+          }
 
-        // 🔥 Get rating
-        const reviewsRef = collection(db, "reviews");
-        const reviewsQ = query(
-          reviewsRef,
-          where("DriverRecievingTheRating", "==", data.userId)
-        );
+          return {
+            userId: data.userId,
+            city: data.location?.city || "",
+            latitude: data.location?.latitude || 0,
+            longitude: data.location?.longitude || 0,
+            speed: data.location?.speed || 0,
+            fullName: userData.fullName || "",
+            phone: userData.phone || "",
+            vehicleType: userData.vehicleType || "",
+            vehicleNumber: userData.vehicleNumber || "",
+            role: userData.role || "",
+            userRole: userData.userRole || "",
+            rating: averageRating || 0,
+          };
+        })
+      );
 
-        const reviewsSnap = await getDocs(reviewsQ);
+      // ✅ NOW set state AFTER Promise resolves
+      const cleanUsers = usersList.filter(Boolean);
+      setCityUsers(cleanUsers);
 
-        let averageRating = 0;
-
-        if (!reviewsSnap.empty) {
-          let total = 0;
-
-          reviewsSnap.forEach((r) => {
-            const rd = r.data();
-            if (rd.rating) total += rd.rating;
-          });
-
-          averageRating = total / reviewsSnap.size;
-        }
-
-        return {
-          userId: data.userId,
-          city: data.location?.city || "",
-          latitude: data.location?.latitude || 0,
-          longitude: data.location?.longitude || 0,
-          speed: data.location?.speed || 0,
-          fullName: userData.fullName || "",
-          phone: userData.phone || "",
-          vehicleType: userData.vehicleType || "",
-          vehicleNumber: userData.vehicleNumber || "",
-          role: userData.role || "",
-          userRole: userData.userRole || "",
-          rating: averageRating || 0,
-        };
-      })
-    );
-
-    const cleanUsers = usersList.filter(Boolean);
-    setCityUsers(cleanUsers);
+    } catch (err) {
+      console.error("Error fetching users:", err);
+    }
   });
 
   return () => unsubscribe();
-
 }, [city]);
 
   // ✅ ETA calculation
@@ -325,24 +332,28 @@ useEffect(() => {
       style={{ height: "100vh", width: "100%" }}
     >
 
-    <TileLayer
-      attribution='© The BSC'
-    url={`https://api.maptiler.com/maps/streets/{z}/{x}/{y}.png?key=QdJadrKmMo3jQGFPxUBf`}
-    />
-
+<TileLayer
+  attribution='Tiles &copy; The BSC'
+  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+/>
       {/* ✅ City bounds */}
       {/*cityBounds && <FitBounds points={cityBounds} />*/}
 
       {/* ✅ City mode with users */}
-      {city && otherUsers.length > 0 ? (
+      {city  ? (
         <>
 <FitBounds
-  points={[
-    ...otherUsers.map(u =>
-      u.latitude && u.longitude ? [u.latitude, u.longitude] : null
-    ),
-    currentLocation
-  ].filter(Boolean)}
+  city={city}
+  points={
+    otherUsers.length > 0
+      ? [
+          ...otherUsers.map(u =>
+            u.latitude && u.longitude ? [u.latitude, u.longitude] : null
+          ),
+          currentLocation
+        ].filter(Boolean)
+      : cityBounds || [currentLocation]
+  }
 />
           {otherUsers.map((user, i) =>
             user.latitude && user.longitude ? (
