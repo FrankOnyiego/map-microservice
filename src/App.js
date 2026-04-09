@@ -85,23 +85,39 @@ const meIcon = L.divIcon({
 });
 
 // ✅ Fit map to markers
-const FitBounds = ({ points }) => {
+const FitBounds = ({ points, city }) => {
   const map = useMap();
+  const hasFittedRef = React.useRef(false);
+  const lastCityRef = React.useRef(null);
 
   useEffect(() => {
     const valid = points.filter(
       (p) => p && Array.isArray(p) && p.length === 2
     );
 
-    if (valid.length < 1) return;
+    if (!valid.length) return;
 
-    const bounds = L.latLngBounds(valid);
-    map.fitBounds(bounds, { padding: [50, 50] });
+    const cityChanged = lastCityRef.current !== city;
+    const firstRun = !hasFittedRef.current;
 
-  }, [points, map]);
+    // ✅ only run once OR when city changes
+    if (firstRun || cityChanged) {
+      const bounds = L.latLngBounds(valid);
+
+      map.fitBounds(bounds, {
+        padding: [50, 50],
+        animate: true,
+      });
+
+      hasFittedRef.current = true;
+      lastCityRef.current = city;
+    }
+
+  }, [points, city, map]);
 
   return null;
 };
+
 
 // ✅ Haversine distance
 const haversineDistance = ([lat1, lon1], [lat2, lon2]) => {
