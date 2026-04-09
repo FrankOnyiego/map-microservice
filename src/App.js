@@ -85,23 +85,20 @@ const meIcon = L.divIcon({
 });
 
 // ✅ Fit map to markers
-const FitBounds = ({ points, city }) => {
+const FitBounds = ({ points }) => {
   const map = useMap();
-  const lastCityRef = React.useRef(null);
 
   useEffect(() => {
-    const valid = points.filter(Boolean);
+    const valid = points.filter(
+      (p) => p && Array.isArray(p) && p.length === 2
+    );
 
-    if (!valid.length) return;
+    if (valid.length < 1) return;
 
-    // ✅ Only refit when city changes
-    if (lastCityRef.current !== city) {
-      const bounds = L.latLngBounds(valid);
-      map.fitBounds(bounds, { padding: [50, 50] });
+    const bounds = L.latLngBounds(valid);
+    map.fitBounds(bounds, { padding: [50, 50] });
 
-      lastCityRef.current = city;
-    }
-  }, [points, city, map]);
+  }, [points, map]);
 
   return null;
 };
@@ -326,7 +323,11 @@ const cleanUsers = usersList.filter(
     const otherUsers = cityUsers.filter(user => user.userId !== uid);
   return (
     <MapContainer
-      center={currentLocation}
+      center={currentLocation ||
+  pickup ||
+  dropoff ||
+  cityBounds?.[0] ||
+  [20, 0]}
       zoom={cityBounds ? 6 : 5}
       style={{ height: "100vh", width: "100%" }}
     >
@@ -377,10 +378,16 @@ const cleanUsers = usersList.filter(
         </>
       ) : (
         <>
-  {/* Spinner only if absolutely nothing exists */}
-  {(!pickup && !dropoff && !currentLocation) && <MapSpineer />}
+        <FitBounds
+  points={[
+    pickup,
+    dropoff,
+    currentLocation,
+  ].filter(Boolean)}
+/>
 
-  {/* ✅ Pickup + Dropoff (independent) */}
+{(!pickup || !dropoff || !currentLocation) && <MapSpineer />}
+
   {pickup && (
     <Marker position={pickup} icon={greenIcon}>
       <Tooltip permanent direction="top">
@@ -397,7 +404,6 @@ const cleanUsers = usersList.filter(
     </Marker>
   )}
 
-  {/* 🚚 Truck only if current location exists */}
   {currentLocation && (
     <Marker position={currentLocation} icon={blueIcon}>
       <Tooltip permanent direction="right">
