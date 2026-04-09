@@ -230,7 +230,7 @@ const formattedCity =
 
 const q = query(
   updatesRef,
-  where("location.city", "==", formattedCity)
+  where("location.city", "==", formattedCity),
 );
   const unsubscribe = onSnapshot(q, async (snapshot) => {
     try {
@@ -247,8 +247,6 @@ const q = query(
           const userData = userDoc.data();
           const role = (userData.role || userData.userRole || "").toLowerCase();
 
-          if (role !== "transporter") return null;
-          
           // 🔥 Get rating
           const reviewsRef = collection(db, "reviews");
           const reviewsQ = query(
@@ -289,8 +287,9 @@ const q = query(
       );
 
       // ✅ NOW set state AFTER Promise resolves
-      const cleanUsers = usersList.filter(Boolean);
-      setCityUsers(cleanUsers);
+const cleanUsers = usersList.filter(
+  (user) => user && (user.userRole || "").toLowerCase() === "transporter"
+);      setCityUsers(cleanUsers);
 
     } catch (err) {
       console.error("Error fetching users:", err);
@@ -378,31 +377,40 @@ const q = query(
         </>
       ) : (
         <>
-          {/* ✅ Spinner overlay */}
-          {(!pickup && !dropoff && !currentLocation) && <MapSpineer />}
+  {/* Spinner only if absolutely nothing exists */}
+  {(!pickup && !dropoff && !currentLocation) && <MapSpineer />}
 
-          {pickup && dropoff && currentLocation && (
-            <>
-              {/*<FitBounds points={[pickup, dropoff, currentLocation]} />*/}
-              <Marker position={pickup} icon={greenIcon}>
-                <Tooltip permanent direction="top">🟢 Pickup Location</Tooltip>
-              </Marker>
-              <Marker position={dropoff} icon={redIcon}>
-                <Tooltip permanent direction="bottom">🔴 Drop-off Location</Tooltip>
-              </Marker>
-              <Marker position={currentLocation} icon={blueIcon}>
-                <Tooltip permanent direction="right">
-                  🚚 Truck {eta ? `- ${eta}` : "Calculating..."}
-                </Tooltip>
-                <Popup>
-                  Truck Location <br />
-                  Speed: {speedKmh?.toFixed(1)} km/h <br />
-                  ETA: {eta || "Calculating..."}
-                </Popup>
-              </Marker>
-            </>
-          )}
-        </>
+  {/* ✅ Pickup + Dropoff (independent) */}
+  {pickup && (
+    <Marker position={pickup} icon={greenIcon}>
+      <Tooltip permanent direction="top">
+        🟢 Pickup Location
+      </Tooltip>
+    </Marker>
+  )}
+
+  {dropoff && (
+    <Marker position={dropoff} icon={redIcon}>
+      <Tooltip permanent direction="bottom">
+        🔴 Drop-off Location
+      </Tooltip>
+    </Marker>
+  )}
+
+  {/* 🚚 Truck only if current location exists */}
+  {currentLocation && (
+    <Marker position={currentLocation} icon={blueIcon}>
+      <Tooltip permanent direction="right">
+        🚚 Truck {eta ? `- ${eta}` : "Calculating..."}
+      </Tooltip>
+      <Popup>
+        Truck Location <br />
+        Speed: {speedKmh?.toFixed(1)} km/h <br />
+        ETA: {eta || "Calculating..."}
+      </Popup>
+    </Marker>
+  )}
+</>
       )}
       {uid && currentLocation && (
   <Marker position={currentLocation} icon={meIcon}>
