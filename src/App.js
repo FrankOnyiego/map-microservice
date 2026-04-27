@@ -12,7 +12,8 @@ import L from "leaflet";
 import "./App.css";
 import MapSpineer from "./mapSpineer";
 import { collection, query, where, onSnapshot, getDocs, doc, getDoc } from "firebase/firestore";
-import { db } from "./firebase"; // adjust path if needed
+import { db,auth } from "./firebase"; // adjust path if needed
+import { signInWithEmailAndPassword } from "firebase/auth";
 
 // ✅ Role icons
 const adminIcon = new L.Icon({
@@ -23,7 +24,7 @@ const adminIcon = new L.Icon({
 });
 const transporterIcon = L.divIcon({
   html: `
-    <svg xmlns="http://www.w3.org/2000/svg" width="35" height="35" fill="green" viewBox="0 0 16 16">
+    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="20" fill="green" viewBox="0 0 16 16">
       <path d="M0 3.5A1.5 1.5 0 0 1 1.5 2h9A1.5 1.5 0 0 1 12 3.5V5h1.02a1.5 1.5 0 0 1 1.17.563l1.481 1.85a1.5 1.5 0 0 1 .329.938V10.5a1.5 1.5 0 0 1-1.5 1.5H14a2 2 0 1 1-4 0H5a2 2 0 1 1-3.998-.085A1.5 1.5 0 0 1 0 10.5zm1.294 7.456A2 2 0 0 1 4.732 11h5.536a2 2 0 0 1 .732-.732V3.5a.5.5 0 0 0-.5-.5h-9a.5.5 0 0 0-.5.5v7a.5.5 0 0 0 .294.456M12 10a2 2 0 0 1 1.732 1h.768a.5.5 0 0 0 .5-.5V8.35a.5.5 0 0 0-.11-.312l-1.48-1.85A.5.5 0 0 0 13.02 6H12zm-9 1a1 1 0 1 0 0 2 1 1 0 0 0 0-2m9 0a1 1 0 1 0 0 2 1 1 0 0 0 0-2"/>
     </svg>
   `,
@@ -152,7 +153,21 @@ function App() {
   const [cityUsers, setCityUsers] = useState([]);
   const [cityBounds, setCityBounds] = useState(null);
   const [uid, setUid] = useState(null);
+  const EMAIL = process.env.REACT_APP_AUTO_LOGIN_EMAIL;
+  const PASSWORD = process.env.REACT_APP_AUTO_LOGIN_PASSWORD;
 
+useEffect(() => {
+  const login = async () => {
+    try {
+      await signInWithEmailAndPassword(auth, EMAIL, PASSWORD);
+      //console.log("Auto login successful");
+    } catch (err) {
+      //console.error("Auto login failed:", err.message);
+    }
+  };
+
+  login();
+}, []);
 useEffect(() => {
   const params = new URLSearchParams(window.location.search);
   setUid(params.get("uid"));
