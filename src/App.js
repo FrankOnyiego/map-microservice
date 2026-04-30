@@ -14,6 +14,7 @@ import MapSpineer from "./mapSpineer";
 import { collection, query, where, onSnapshot, getDocs, doc, getDoc } from "firebase/firestore";
 import { db,auth } from "./firebase"; // adjust path if needed
 import { signInWithEmailAndPassword } from "firebase/auth";
+import CityUsersPanel from "./CityUsersPanel";
 
 // ✅ Role icons
 const adminIcon = new L.Icon({
@@ -251,74 +252,56 @@ useEffect(() => {
   //get the users in the city
 useEffect(() => {
   if (!city) return;
-console.log(city)
-  const updatesRef = collection(db, "userBackgroundUpdates");
-const formattedCity =
-  city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
 
-const q = query(
-  updatesRef,
-  where("location.city", "==", formattedCity),
-);
+  const updatesRef = collection(db, "userBackgroundUpdates");
+  const q = query(updatesRef);
+
   const unsubscribe = onSnapshot(q, async (snapshot) => {
     try {
-      const usersList = await Promise.all(
-        snapshot.docs.map(async (docSnap) => {
-          const data = docSnap.data();
-          if (!data.userId) return null;
+     setCityUsers([]); // reset first
 
-          // 🔥 Get user profile
-          const userRef = doc(db, "users", data.userId);
-          const userDoc = await getDoc(userRef);
-          if (!userDoc.exists()) return null;
+for (const docSnap of snapshot.docs) {
+  const data = docSnap.data();
+  if (!data.userId) continue;
 
-          const userData = userDoc.data();
-          const role = (userData.role || userData.userRole || "").toLowerCase();
+  const formattedCity = (city || "").trim().toLowerCase();
 
-          // 🔥 Get rating
-          const reviewsRef = collection(db, "reviews");
-          const reviewsQ = query(
-            reviewsRef,
-            where("DriverRecievingTheRating", "==", data.userId)
-          );
+  if (
+    !data.location?.city ||
+    data.location.city.trim().toLowerCase() !== formattedCity
+  ) {
+    continue;
+  }
 
-          const reviewsSnap = await getDocs(reviewsQ);
+  const userRef = doc(db, "users", data.userId);
+  const userDoc = await getDoc(userRef);
+  if (!userDoc.exists()) continue;
 
-          let averageRating = 0;
+  const userData = userDoc.data();
 
-          if (!reviewsSnap.empty) {
-            let total = 0;
+  if ((userData.userRole || "").toLowerCase() !== "transporter") {
+    continue;
+  }
 
-            reviewsSnap.forEach((r) => {
-              const rd = r.data();
-              if (rd.rating) total += rd.rating;
-            });
+  const newUser = {
+    userId: data.userId,
+    city: data.location.city,
+    latitude: data.location.latitude,
+    longitude: data.location.longitude,
+    fullName: userData.fullName,
+    phone: userData.phone,
+    vehicleType: userData.vehicleType,
+    vehicleNumber: userData.vehicleNumber,
+    role: userData.userRole,
+    rating: 0,
+  };
 
-            averageRating = total / reviewsSnap.size;
-          }
+  // ✅ add one by one (this is the key change)
+  setCityUsers(prev => [...prev, newUser]);
 
-          return {
-            userId: data.userId,
-            city: data.location?.city || "",
-            latitude: data.location?.latitude || 0,
-            longitude: data.location?.longitude || 0,
-            speed: data.location?.speed || 0,
-            fullName: userData.fullName || "",
-            phone: userData.phone || "",
-            vehicleType: userData.vehicleType || "",
-            vehicleNumber: userData.vehicleNumber || "",
-            role: userData.role || "",
-            userRole: userData.userRole || "",
-            rating: averageRating || 0,
-          };
-        })
-      );
-
-      // ✅ NOW set state AFTER Promise resolves
-const cleanUsers = usersList.filter(
-  (user) => user && (user.userRole || "").toLowerCase() === "transporter"
-);      setCityUsers(cleanUsers);
-
+  // optional: slow it down so you SEE them appear one by one
+  await new Promise(res => setTimeout(res, 150));
+}
     } catch (err) {
       console.error("Error fetching users:", err);
     }
@@ -366,6 +349,8 @@ const cleanUsers = usersList.filter(
       zoom={cityBounds ? 6 : 5}
       style={{ height: "100vh", width: "100%" }}
     >
+
+{/**city && <CityUsersPanel users={cityUsers} />**/}
 
 <TileLayer
   attribution='&copy; The BSC'
